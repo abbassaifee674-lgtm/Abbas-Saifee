@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProcureHunter AI – Autonomous Job & Outreach Agent for Abbas Saifee</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navigation Bar -->
+        <header class="navbar">
+            <div class="nav-left">
+                <div class="brand-logo">
+                    <i class="fa-solid fa-plane-departure"></i>
+                </div>
+                <div class="brand-info">
+                    <div class="brand-title">ProcureHunter <span class="badge-ai">AI AGENT</span></div>
+                    <div class="brand-sub">Autonomous Procurement Job Search & Cold Outreach</div>
+                </div>
+            </div>
+
+            <div class="candidate-pill">
+                <div class="avatar-ring">
+                    <span class="avatar-initials">AS</span>
+                    <span class="status-indicator"></span>
+                </div>
+                <div class="candidate-meta">
+                    <span class="candidate-name">Abbas Saifee</span>
+                    <span class="candidate-role">Procurement Specialist (6+ Yrs) • UAE</span>
+                </div>
+                <a href="/api/cv/download" target="_blank" class="btn-cv-pill" title="View Official CV">
+                    <i class="fa-solid fa-file-pdf"></i> CV Ready
+                </a>
+            </div>
+
+            <div class="nav-actions">
+                <button id="btnScan" class="btn btn-primary">
+                    <i class="fa-solid fa-bolt"></i> <span>Run AI Hunter</span>
+                </button>
+                <button id="btnOpenManual" class="btn btn-secondary">
+                    <i class="fa-solid fa-plus"></i> Add Job
+                </button>
+                <button id="btnOpenSettings" class="btn btn-icon" title="SMTP & Agent Settings">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Dashboard View -->
+        <main class="main-content">
+            <!-- Alert Banner / Scan Progress -->
+            <div id="scanStatusBar" class="scan-status-bar hidden">
+                <div class="spinner-circle"></div>
+                <div class="scan-status-text">
+                    <strong>AI Agent Active:</strong> Scanning job boards & corporate career directories across 12 countries...
+                </div>
+            </div>
+
+            <!-- Daily 50 Companies Goal Banner -->
+            <section class="daily-goal-card">
+                <div class="daily-goal-info">
+                    <div class="daily-goal-badge"><i class="fa-solid fa-bullseye"></i> DAILY TARGET: 50 COMPANIES</div>
+                    <div class="daily-goal-title">
+                        <span id="dailyProgressCount">0</span> / 50 Procurement Companies Discovered Today
+                    </div>
+                    <div class="daily-progress-bar-wrap">
+                        <div class="daily-progress-bar" id="dailyProgressBar" style="width: 0%;"></div>
+                    </div>
+                </div>
+                <div class="daily-goal-action">
+                    <button id="btnDaily50" class="btn btn-emerald">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Hunt Today's 50 Companies
+                    </button>
+                    <div class="daily-goal-status" id="dailyGoalStatus">
+                        <i class="fa-solid fa-circle-check"></i> Target in Progress
+                    </div>
+                </div>
+            </section>
+
+            <!-- Stats Overview Grid -->
+            <section class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon icon-jobs"><i class="fa-solid fa-briefcase"></i></div>
+                    <div class="stat-details">
+                        <div class="stat-value" id="statTotalJobs">0</div>
+                        <div class="stat-label">Procurement Roles Found</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon icon-countries"><i class="fa-solid fa-earth-americas"></i></div>
+                    <div class="stat-details">
+                        <div class="stat-value" id="statCountries">12</div>
+                        <div class="stat-label">Target Countries</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon icon-emails"><i class="fa-solid fa-at"></i></div>
+                    <div class="stat-details">
+                        <div class="stat-value" id="statEmails">0</div>
+                        <div class="stat-label">Hiring Emails Extracted</div>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon icon-sent"><i class="fa-solid fa-paper-plane"></i></div>
+                    <div class="stat-details">
+                        <div class="stat-value" id="statSent">0</div>
+                        <div class="stat-label">Cold Applications Sent</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Country Quick Filter Bar -->
+            <section class="country-filter-section">
+                <div class="section-title-sm">
+                    <i class="fa-solid fa-filter"></i> Target Country Filter (12 Selected Countries)
+                </div>
+                <div class="country-pills-wrap" id="countryPillsContainer">
+                    <button class="country-pill active" data-country="All">
+                        <span class="flag">🌐</span> All Countries <span class="count-badge" id="badgeAll">0</span>
+                    </button>
+                    <!-- Country pills populated dynamically -->
+                </div>
+            </section>
+
+            <!-- Content Area: Jobs List & Actions -->
+            <section class="jobs-section">
+                <div class="section-header">
+                    <div class="search-and-filters">
+                        <div class="search-box">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="searchInput" placeholder="Search company, title, or keywords (e.g. Aviation, SAP, Buyer)...">
+                        </div>
+                        <div class="filter-dropdown-wrap">
+                            <select id="statusFilter" class="select-control">
+                                <option value="All">All Statuses</option>
+                                <option value="DRAFTED">Draft Ready</option>
+                                <option value="SENT">Sent</option>
+                                <option value="SIMULATED_SENT">Simulated Sent</option>
+                                <option value="DISCOVERED">Discovered</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="header-right-actions">
+                        <button id="btnBatchSend" class="btn btn-outline-success">
+                            <i class="fa-solid fa-paper-plane"></i> Send All Approved
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Jobs Cards Grid -->
+                <div class="jobs-grid" id="jobsContainer">
+                    <!-- Populated via Javascript -->
+                </div>
+            </section>
+        </main>
+
+        <!-- Pitch & CV Preview Drawer / Modal -->
+        <div id="emailModal" class="modal-overlay hidden">
+            <div class="modal-container email-modal-card">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <div class="modal-title">
+                            <i class="fa-solid fa-envelope-open-text"></i> Cold Outreach Pitch Review
+                        </div>
+                        <div class="modal-subtitle" id="modalJobCompany">Company & Role</div>
+                    </div>
+                    <button class="btn-close" id="btnCloseEmailModal">&times;</button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group flex-2">
+                            <label>Recipient Email (Hiring Team / HR):</label>
+                            <div class="input-with-icon">
+                                <i class="fa-solid fa-envelope"></i>
+                                <input type="email" id="modalRecipient" placeholder="e.g. recruitment@company.com">
+                            </div>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>Target Country:</label>
+                            <input type="text" id="modalCountry" readonly class="input-readonly">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Email Subject:</label>
+                        <input type="text" id="modalSubject" class="input-subject">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Personalized Pitch Message:</label>
+                        <textarea id="modalBody" rows="12" class="textarea-pitch"></textarea>
+                    </div>
+
+                    <!-- Attachment Badge -->
+                    <div class="attachment-box">
+                        <div class="attachment-info">
+                            <i class="fa-solid fa-file-pdf file-icon"></i>
+                            <div>
+                                <div class="file-name">Abbas_Saifee_Procurement_CV.pdf</div>
+                                <div class="file-meta">Official ATS-Optimized Resume • 6.2 KB • Ready for Attachment</div>
+                            </div>
+                        </div>
+                        <a href="/api/cv/download" target="_blank" class="btn-preview-cv">
+                            <i class="fa-solid fa-eye"></i> View PDF
+                        </a>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <div class="footer-left">
+                        <button id="btnSaveDraft" class="btn btn-outline">
+                            <i class="fa-solid fa-floppy-disk"></i> Save Draft
+                        </button>
+                    </div>
+                    <div class="footer-right">
+                        <button id="btnSendTest" class="btn btn-secondary">
+                            <i class="fa-solid fa-vial"></i> Send Test to Me
+                        </button>
+                        <button id="btnSendLive" class="btn btn-primary">
+                            <i class="fa-solid fa-paper-plane"></i> Send Application Now
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Manual Job Modal -->
+        <div id="manualJobModal" class="modal-overlay hidden">
+            <div class="modal-container">
+                <div class="modal-header">
+                    <div class="modal-title">
+                        <i class="fa-solid fa-plus-circle"></i> Add Opportunity Manually
+                    </div>
+                    <button class="btn-close" id="btnCloseManualModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-desc">Found a company or procurement vacancy on LinkedIn or a company website? Enter it here and the AI agent will auto-generate Abbas's tailored email pitch and find contacts!</p>
+                    
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label>Company Name *</label>
+                            <input type="text" id="manCompany" placeholder="e.g. Cargolux, ST Engineering">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>Job Title *</label>
+                            <input type="text" id="manTitle" placeholder="e.g. Procurement Specialist, Buyer">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label>Country *</label>
+                            <select id="manCountry" class="select-control">
+                                <option value="Luxembourg">🇱🇺 Luxembourg</option>
+                                <option value="Austria">🇦🇹 Austria</option>
+                                <option value="Singapore">🇸🇬 Singapore</option>
+                                <option value="Malaysia">🇲🇾 Malaysia</option>
+                                <option value="Australia">🇦🇺 Australia</option>
+                                <option value="Norway">🇳🇴 Norway</option>
+                                <option value="Denmark">🇩🇰 Denmark</option>
+                                <option value="New Zealand">🇳🇿 New Zealand</option>
+                                <option value="South Africa">🇿🇦 South Africa</option>
+                                <option value="Germany">🇩🇪 Germany</option>
+                                <option value="France">🇫🇷 France</option>
+                                <option value="Italy">🇮🇹 Italy</option>
+                            </select>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>Location / City</label>
+                            <input type="text" id="manLocation" placeholder="e.g. Frankfurt, Changi, Vienna">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label>Contact Email (Optional - agent will guess if blank)</label>
+                            <input type="email" id="manEmail" placeholder="e.g. careers@company.com">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>Company Website / Domain</label>
+                            <input type="text" id="manDomain" placeholder="e.g. cargolux.com">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Job Posting URL or Notes</label>
+                        <input type="text" id="manUrl" placeholder="https://...">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="btnCancelManual">Cancel</button>
+                    <button class="btn btn-primary" id="btnSaveManual">
+                        <i class="fa-solid fa-check"></i> Add & Generate Cold Pitch
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings & SMTP Modal -->
+        <div id="settingsModal" class="modal-overlay hidden">
+            <div class="modal-container">
+                <div class="modal-header">
+                    <div class="modal-title">
+                        <i class="fa-solid fa-sliders"></i> Agent & SMTP Settings
+                    </div>
+                    <button class="btn-close" id="btnCloseSettingsModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-callout">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        <div>
+                            <strong>Safe Simulation Mode is active by default.</strong><br>
+                            You can review all tailored drafts and test sending safely. To send live emails from Abbas's Gmail address (<code>abbasshabbir5153@gmail.com</code>), generate a 16-character <b>Google App Password</b> from your Google Account and enter it below.
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label>Sender Full Name</label>
+                            <input type="text" id="setSenderName" value="Abbas Saifee">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>Sender Email (Abbas)</label>
+                            <input type="email" id="setSenderEmail" value="abbasshabbir5153@gmail.com">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group flex-2">
+                            <label>SMTP Host</label>
+                            <input type="text" id="setSmtpServer" value="smtp.gmail.com">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>SMTP Port</label>
+                            <input type="text" id="setSmtpPort" value="587">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label>SMTP Username</label>
+                            <input type="text" id="setSmtpUser" value="abbasshabbir5153@gmail.com">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>SMTP App Password</label>
+                            <input type="password" id="setSmtpPassword" placeholder="••••••••••••••••">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label>Operation Mode</label>
+                            <select id="setTestMode" class="select-control">
+                                <option value="true">Test / Review Mode (Safe Simulation)</option>
+                                <option value="false">Live Production Mode (Direct Sending)</option>
+                            </select>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>Test Recipient Email (For test sends)</label>
+                            <input type="email" id="setTestRecipient" placeholder="your-email@gmail.com">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="btnCancelSettings">Close</button>
+                    <button class="btn btn-primary" id="btnSaveSettings">
+                        <i class="fa-solid fa-floppy-disk"></i> Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification Toast -->
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
