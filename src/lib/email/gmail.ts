@@ -21,13 +21,13 @@ export interface SendEmailResult {
   error?: string;
 }
 
-export function getOAuth2Client() {
+export function getOAuth2Client(customRedirectUri?: string) {
   const { clientId, clientSecret, redirectUri } = getResolvedOAuthCredentials();
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  return new google.auth.OAuth2(clientId, clientSecret, customRedirectUri || redirectUri);
 }
 
-export function getGmailAuthUrl(): string {
-  const oauth2Client = getOAuth2Client();
+export function getGmailAuthUrl(customRedirectUri?: string): string {
+  const oauth2Client = getOAuth2Client(customRedirectUri);
   const scopes = [
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.readonly",

@@ -7,7 +7,9 @@ export async function GET(req: NextRequest) {
   if (authRes instanceof NextResponse) return authRes;
 
   try {
-    const authUrl = getGmailAuthUrl();
+    const origin = req.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "https://abbassaifee.netlify.app";
+    const redirectUri = `${origin}/api/auth/gmail/callback`;
+    const authUrl = getGmailAuthUrl(redirectUri);
     return NextResponse.json({ url: authUrl });
   } catch (err: any) {
     return NextResponse.json(

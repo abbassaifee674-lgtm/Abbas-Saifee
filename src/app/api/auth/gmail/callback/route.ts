@@ -10,14 +10,15 @@ export async function GET(req: NextRequest) {
   const code = searchParams.get("code");
   const error = searchParams.get("error");
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const origin = req.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "https://abbassaifee.netlify.app";
+  const redirectUri = `${origin}/api/auth/gmail/callback`;
 
   if (error || !code) {
-    return NextResponse.redirect(`${baseUrl}/settings?gmail_error=${encodeURIComponent(error || "Missing auth code")}`);
+    return NextResponse.redirect(`${origin}/settings?gmail_error=${encodeURIComponent(error || "Missing auth code")}`);
   }
 
   try {
-    const oauth2Client = getOAuth2Client();
+    const oauth2Client = getOAuth2Client(redirectUri);
     const { tokens } = await oauth2Client.getToken(code);
 
     if (tokens.refresh_token) {
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
 
       if (userEmail.toLowerCase() !== ALLOWED_EMAIL.toLowerCase()) {
         return NextResponse.redirect(
-          `${baseUrl}/settings?gmail_error=${encodeURIComponent(`Unauthorized Gmail account: ${userEmail}. Only ${ALLOWED_EMAIL} is permitted.`)}`
+          `${origin}/settings?gmail_error=${encodeURIComponent(`Unauthorized Gmail account: ${userEmail}. Only ${ALLOWED_EMAIL} is permitted.`)}`
         );
       }
 
@@ -43,12 +44,12 @@ export async function GET(req: NextRequest) {
 
       console.log(`[GMAIL AUTH SUCCESS] Abbas authenticated. Token encrypted and saved in private_tokens.`);
 
-      return NextResponse.redirect(`${baseUrl}/settings?gmail_success=true`);
+      return NextResponse.redirect(`${origin}/settings?gmail_success=true`);
     } else {
-      return NextResponse.redirect(`${baseUrl}/settings?gmail_error=No+refresh+token+returned.+Please+revoke+app+access+and+try+again.`);
+      return NextResponse.redirect(`${origin}/settings?gmail_error=No+refresh+token+returned.+Please+revoke+app+access+and+try+again.`);
     }
   } catch (err: any) {
     console.error("Gmail OAuth callback failed:", err);
-    return NextResponse.redirect(`${baseUrl}/settings?gmail_error=${encodeURIComponent(err.message)}`);
+    return NextResponse.redirect(`${origin}/settings?gmail_error=${encodeURIComponent(err.message)}`);
   }
 }

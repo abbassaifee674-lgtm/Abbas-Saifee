@@ -8,7 +8,7 @@ import type { Handler, HandlerEvent, HandlerContext, schedule } from "@netlify/f
  * To test locally:  netlify functions:invoke scheduled-find-jobs
  */
 const scheduledHandler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
-  const baseUrl = process.env.NETLIFY_URL || process.env.URL || "http://localhost:3000";
+  const baseUrl = process.env.NETLIFY_URL || process.env.URL || "https://abbassaifee.netlify.app";
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {
