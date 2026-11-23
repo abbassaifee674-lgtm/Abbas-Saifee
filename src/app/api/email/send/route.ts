@@ -5,6 +5,7 @@ import { checkDailySendQuota, recordSentEmail } from "@/lib/utils/rate_limiter";
 import { sendApplicationEmail } from "@/lib/email/gmail";
 import { ALLOWED_EMAIL } from "@/lib/constants/defaults";
 import { decryptToken } from "@/lib/email/crypto";
+import { getCVFromFirestore } from "@/lib/firebase/cv_store";
 
 export async function POST(req: NextRequest) {
   const authRes = await verifyAbbasAuth(req);
@@ -57,9 +58,22 @@ export async function POST(req: NextRequest) {
       : undefined;
 
     const profile = memoryStore.getProfile();
-    const settings = memoryStore.getSettings();
 
-    // 3. Send email via Gmail API or Simulation Mode
+    // 3. Retrieve CV PDF from Firestore (decoded from base64)
+    let cvBuffer: Buffer | null = null;
+    let cvFileName = profile.cvFileName || "Abbas_Saifee_Procurement_CV.pdf";
+
+    try {
+      const storedCV = await getCVFromFirestore(authRes.uid || "abbas_saifee");
+      if (storedCV) {
+        cvBuffer = storedCV.buffer;
+        cvFileName = storedCV.fileName;
+      }
+    } catch (cvErr) {
+      console.warn("Could not load CV from Firestore, falling back to local file:", cvErr);
+    }
+
+    // 4. Send email via Gmail API or Simulation Mode
     let sendResult = {
       success: true,
       messageId: `sim_msg_${Date.now()}`,
@@ -78,7 +92,8 @@ export async function POST(req: NextRequest) {
           subject: subject || lead.emailSubject,
           body: emailBody || lead.emailBody,
           refreshToken: plainRefreshToken,
-          cvFileName: profile.cvFileName || "Abbas_Saifee_Procurement_CV.pdf",
+          cvBuffer,
+          cvFileName,
         });
 
         if (!result.success) {
@@ -88,7 +103,6 @@ export async function POST(req: NextRequest) {
         sendResult.threadId = result.threadId || sendResult.threadId;
       } catch (gmailErr: any) {
         console.error("Gmail sending error:", gmailErr);
-        // Mark lead as Failed
         lead.status = "Failed";
         lead.error = gmailErr.message || "Failed to dispatch email via Gmail API";
         lead.updatedAt = new Date().toISOString();
@@ -100,10 +114,10 @@ export async function POST(req: NextRequest) {
         );
       }
     } else {
-      console.log(`[SIMULATED DISPATCH] Sent to ${lead.contactEmail} from ${ALLOWED_EMAIL}`);
+      console.log(`[SIMULATED DISPATCH] Sent to ${lead.contactEmail} from ${ALLOWED_EMAIL} with CV attachment: ${cvFileName}`);
     }
 
-    // 4. Update lead status to Sent
+    // 5. Update lead status to Sent
     recordSentEmail();
     lead.status = "Sent";
     lead.sentAt = new Date().toISOString();
@@ -120,6 +134,7 @@ export async function POST(req: NextRequest) {
       warning: companySentWarning,
       dailySends: memoryStore.getDailySends(),
       remainingToday: quota.remaining,
+      attachedCV: cvFileName,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

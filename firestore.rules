@@ -7,6 +7,11 @@ service cloud.firestore {
              request.auth.token.email.lower() == 'abbassaifee674@gmail.com';
     }
 
+    // User Profile and CV storage documents (base64 CV stored directly in Firestore, zero Storage bucket needed)
+    match /users/{userId}/{document=**} {
+      allow read, write: if isAbbas();
+    }
+
     // Settings collection: only Abbas can read/write his user profile and settings
     match /settings/{userId} {
       allow read, write: if isAbbas() && request.auth.uid == userId;
@@ -20,7 +25,6 @@ service cloud.firestore {
     // Run logs collection: job hunter audit trail
     match /run_logs/{logId} {
       allow read: if isAbbas();
-      // Server-side writes (via Firebase Admin SDK or authorized cron) bypass client rules
       allow write: if isAbbas();
     }
 

@@ -8,6 +8,7 @@ export interface SendEmailParams {
   body: string;
   fromEmail: string;
   refreshToken: string;
+  cvBuffer?: Buffer | null;
   cvFilePath?: string;
   cvFileName?: string;
 }
@@ -48,20 +49,23 @@ export async function sendApplicationEmail(params: SendEmailParams): Promise<Sen
 
   const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-  // Resolve CV attachment path
-  let cvAttachmentBuffer: Buffer | null = null;
+  // 1. Resolve CV attachment buffer (prefer buffer from Firestore)
+  let cvAttachmentBuffer: Buffer | null = params.cvBuffer || null;
   const fileName = params.cvFileName || "Abbas_Saifee_Procurement_CV.pdf";
 
-  const potentialPaths = [
-    params.cvFilePath,
-    path.join(process.cwd(), "assets", fileName),
-    path.join(process.cwd(), "assets", "Abbas_Saifee_Procurement_CV.pdf"),
-  ].filter(Boolean) as string[];
+  // Fallback to local filesystem assets if no buffer provided directly
+  if (!cvAttachmentBuffer) {
+    const potentialPaths = [
+      params.cvFilePath,
+      path.join(process.cwd(), "assets", fileName),
+      path.join(process.cwd(), "assets", "Abbas_Saifee_Procurement_CV.pdf"),
+    ].filter(Boolean) as string[];
 
-  for (const p of potentialPaths) {
-    if (fs.existsSync(p)) {
-      cvAttachmentBuffer = fs.readFileSync(p);
-      break;
+    for (const p of potentialPaths) {
+      if (fs.existsSync(p)) {
+        cvAttachmentBuffer = fs.readFileSync(p);
+        break;
+      }
     }
   }
 

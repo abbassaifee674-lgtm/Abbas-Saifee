@@ -13,7 +13,7 @@ JobPilot automatically discovers relevant openings matching Abbas's verified CV 
 
 - **Framework**: [Next.js](https://nextjs.org/) 14 (App Router) + TypeScript + Tailwind CSS
 - **Authentication**: Firebase Authentication (Google Sign-In with strict single-user lockdown to `abbassaifee674@gmail.com`)
-- **Database & Storage**: Cloud Firestore + Firebase Storage (with seed/in-memory fallback store for zero-config testing)
+- **Database**: Cloud Firestore (100% Free Spark Tier; CV PDFs stored directly in Firestore, zero paid Storage/Blaze plan needed)
 - **AI Engine**: Google Gemini API (Free tier, `gemini-2.0-flash` / `gemini-1.5-flash`), encapsulated in a modular provider interface (ready to swap with Groq or OpenRouter)
 - **Email Sending**: Gmail API (OAuth2) with MIME multipart handling and PDF attachment (`Abbas_Saifee_Procurement_CV.pdf`)
 - **Job Finding Adapters**: Adzuna API, Jooble API, Arbeitnow API, Remotive, and The Muse
@@ -157,7 +157,7 @@ Fill in the configuration parameters detailed below.
    - Deploy `firestore.rules` (or paste the contents of `firestore.rules` into the Rules tab in the console).
 4. **Obtain Client Keys**:
    - Go to **Project Settings > General > Your apps > Web app (</>)**.
-   - Copy `apiKey`, `authDomain`, `projectId`, `storageBucket`, etc., into `NEXT_PUBLIC_FIREBASE_*`.
+   - Copy `apiKey`, `authDomain`, `projectId`, `messagingSenderId`, `appId` into `NEXT_PUBLIC_FIREBASE_*` (NOTE: No storage bucket is needed since CVs are stored in Firestore directly).
 5. **Obtain Admin Service Account**:
    - Go to **Project Settings > Service accounts > Generate new private key**.
    - Copy `client_email` to `FIREBASE_CLIENT_EMAIL` and `private_key` to `FIREBASE_PRIVATE_KEY`.

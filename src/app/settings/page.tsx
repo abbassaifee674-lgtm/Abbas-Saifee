@@ -27,9 +27,9 @@ export default function SettingsPage() {
   const [newSkill, setNewSkill] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newCountry, setNewCountry] = useState("");
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
-  const showToast = (message: string, type: "success" | "error" = "success") => {
+  const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   };
@@ -95,8 +95,17 @@ export default function SettingsPage() {
       return;
     }
 
+    const fileSizeKB = Math.round(file.size / 1024);
+    if (file.size > 700 * 1024) {
+      showToast(
+        `PDF is ${fileSizeKB} KB. For best performance on Firestore free tier, please compress your PDF under 700 KB. Uploading with multi-document chunking fallback...`,
+        "info"
+      );
+    } else {
+      showToast("Uploading CV and extracting structured profile via Gemini AI...", "success");
+    }
+
     setIsUploadingCV(true);
-    showToast("Uploading CV and extracting structured profile via Gemini AI...", "success");
 
     const formData = new FormData();
     formData.append("file", file);
@@ -403,10 +412,13 @@ export default function SettingsPage() {
               <p className="text-xs text-slate-400 mt-0.5">
                 Current attached file: <span className="font-mono text-indigo-300">{profile.cvFileName}</span>
               </p>
+              <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" /> Stored in Cloud Firestore (Free Spark Plan • Max recommended: 700 KB)
+              </p>
             </div>
             <label className="flex items-center gap-2 cursor-pointer rounded-xl bg-slate-800 px-4 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700 transition-all border border-slate-700">
               <Upload className="h-4 w-4 text-indigo-400" />
-              <span>{isUploadingCV ? "Parsing PDF..." : "Upload New CV (PDF)"}</span>
+              <span>{isUploadingCV ? "Parsing & Storing..." : "Upload New CV (PDF)"}</span>
               <input
                 type="file"
                 accept="application/pdf"
