@@ -12,24 +12,23 @@
     "@google/generative-ai": "^0.21.0",
     "@netlify/functions": "^6.1.1",
     "@netlify/plugin-nextjs": "^5.16.8",
+    "@types/node": "^20.17.6",
+    "@types/pdf-parse": "^1.1.4",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
     "firebase": "^11.0.2",
     "firebase-admin": "^13.0.1",
     "googleapis": "^144.0.0",
     "lucide-react": "^0.460.0",
     "next": "^14.2.18",
     "pdf-parse": "^1.1.1",
+    "postcss": "^8.4.49",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.6.3",
     "zod": "^4.6.7"
   },
-  "devDependencies": {
-    "@types/node": "^20.17.6",
-    "@types/pdf-parse": "^1.1.4",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.15",
-    "typescript": "^5.6.3"
-  }
+  "devDependencies": {}
 }

@@ -10,7 +10,7 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
-# Environment hints
-[context.production.environment]
-  NODE_ENV = "production"
+# Ensure all dependencies are installed for the build
+[build.environment]
+  NPM_FLAGS = "--include=dev"
   NEXT_TELEMETRY_DISABLED = "1"
