@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import fs from "fs";
 import path from "path";
+import { getResolvedOAuthCredentials } from "../env";
 
 export interface SendEmailParams {
   to: string;
@@ -21,10 +22,7 @@ export interface SendEmailResult {
 }
 
 export function getOAuth2Client() {
-  const clientId = process.env.GMAIL_CLIENT_ID;
-  const clientSecret = process.env.GMAIL_CLIENT_SECRET;
-  const redirectUri = process.env.GMAIL_REDIRECT_URI || `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth/gmail/callback`;
-
+  const { clientId, clientSecret, redirectUri } = getResolvedOAuthCredentials();
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 

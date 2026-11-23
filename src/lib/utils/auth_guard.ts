@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ALLOWED_EMAIL } from "../constants/defaults";
 import { getFirebaseAdmin } from "../firebase/admin";
+import { isDemoModeActive } from "../env";
 
 export interface AuthenticatedUser {
   email: string;
@@ -11,23 +12,43 @@ export interface AuthenticatedUser {
  * Validates request authorization:
  * - Checks Bearer ID token from Firebase Auth
  * - Validates that the token email matches ALLOWED_EMAIL strictly
- * - In demo/dev mode without Firebase Admin configured, allows requests matching ALLOWED_EMAIL
+ * - Returns HTTP 401 for missing/invalid token
+ * - Returns HTTP 403 for non-allowed email
  */
 export async function verifyAbbasAuth(req: NextRequest): Promise<AuthenticatedUser | NextResponse> {
-  const authHeader = req.headers.get("Authorization");
-
-  // Allow bypass for local dev demo mode if header has x-demo-user: abbas
+  const isDemo = isDemoModeActive();
   const demoHeader = req.headers.get("x-demo-user");
-  if (demoHeader === "abbas" || (!process.env.FIREBASE_PROJECT_ID && !process.env.NEXT_PUBLIC_FIREBASE_API_KEY)) {
+
+  // Allow Netlify Scheduled Function / internal cron calls via CRON_SECRET header
+  const cronSecret = req.headers.get("x-cron-secret");
+  if (cronSecret && cronSecret === process.env.CRON_SECRET) {
     return {
       email: ALLOWED_EMAIL,
-      uid: "abbas_saifee_uid_primary",
+      uid: "cron_service_account",
     };
   }
 
+  // Only allow bypass when DEMO_MODE=true is explicitly set in environment
+  if (isDemo && demoHeader === "abbas") {
+    return {
+      email: ALLOWED_EMAIL,
+      uid: "abbas_saifee_demo_uid",
+    };
+  }
+
+  const authHeader = req.headers.get("Authorization");
+
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    // In local dev, if demo header was passed and DEMO_MODE was enabled
+    if (isDemo) {
+      return {
+        email: ALLOWED_EMAIL,
+        uid: "abbas_saifee_local_uid",
+      };
+    }
+
     return NextResponse.json(
-      { error: "Unauthorized: Missing or invalid authentication token" },
+      { error: "Unauthorized: Missing authentication token" },
       { status: 401 }
     );
   }
@@ -41,7 +62,7 @@ export async function verifyAbbasAuth(req: NextRequest): Promise<AuthenticatedUs
     if (!decodedToken.email || decodedToken.email.toLowerCase() !== ALLOWED_EMAIL.toLowerCase()) {
       return NextResponse.json(
         {
-          error: `Forbidden: Access restricted to authorized account (${ALLOWED_EMAIL}). Received: ${decodedToken.email}`,
+          error: `Forbidden: Access restricted strictly to authorized user (${ALLOWED_EMAIL}). Received: ${decodedToken.email}`,
         },
         { status: 403 }
       );
@@ -52,17 +73,10 @@ export async function verifyAbbasAuth(req: NextRequest): Promise<AuthenticatedUs
       uid: decodedToken.uid,
     };
   } catch (err: any) {
-    // If Firebase Admin is not yet configured, allow grace if in local environment
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("Firebase Admin verifyIdToken skipped in dev (unconfigured service account):", err.message);
-      return {
-        email: ALLOWED_EMAIL,
-        uid: "abbas_dev_fallback_uid",
-      };
-    }
+    console.error("Firebase ID Token verification error:", err.message);
 
     return NextResponse.json(
-      { error: "Authentication failed: Invalid or expired token" },
+      { error: "Authentication failed: Invalid or expired Firebase ID token" },
       { status: 401 }
     );
   }

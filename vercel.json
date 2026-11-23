@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/find-jobs",
-      "schedule": "0 8,18 * * *"
-    }
-  ]
-}

@@ -6,6 +6,8 @@ import { sendApplicationEmail } from "@/lib/email/gmail";
 import { ALLOWED_EMAIL } from "@/lib/constants/defaults";
 import { decryptToken } from "@/lib/email/crypto";
 import { getCVFromFirestore } from "@/lib/firebase/cv_store";
+import { getGmailRefreshToken } from "@/lib/firebase/server_store";
+import { getResolvedOAuthCredentials } from "@/lib/env";
 
 export async function POST(req: NextRequest) {
   const authRes = await verifyAbbasAuth(req);
@@ -81,17 +83,17 @@ export async function POST(req: NextRequest) {
       error: undefined as string | undefined,
     };
 
-    const encryptedToken = process.env.GMAIL_REFRESH_TOKEN;
+    const refreshToken = await getGmailRefreshToken();
+    const { clientId, clientSecret } = getResolvedOAuthCredentials();
 
-    if (encryptedToken && process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET) {
+    if (refreshToken && clientId && clientSecret) {
       try {
-        const plainRefreshToken = decryptToken(encryptedToken);
         const result = await sendApplicationEmail({
           to: lead.contactEmail,
           fromEmail: ALLOWED_EMAIL,
           subject: subject || lead.emailSubject,
           body: emailBody || lead.emailBody,
-          refreshToken: plainRefreshToken,
+          refreshToken,
           cvBuffer,
           cvFileName,
         });

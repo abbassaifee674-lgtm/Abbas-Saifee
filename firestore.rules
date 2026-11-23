@@ -7,30 +7,45 @@ service cloud.firestore {
              request.auth.token.email.lower() == 'abbassaifee674@gmail.com';
     }
 
-    // User Profile and CV storage documents (base64 CV stored directly in Firestore, zero Storage bucket needed)
-    match /users/{userId}/{document=**} {
+    // 1. User CV & parsed profile storage (Free Spark Plan • no Storage bucket needed)
+    match /users/{userId}/cv/{document=**} {
+      allow read, write: if isAbbas();
+    }
+    match /users/{userId}/cv_chunks/{document=**} {
       allow read, write: if isAbbas();
     }
 
-    // Settings collection: only Abbas can read/write his user profile and settings
+    // 2. Settings collection: only Abbas can read/write his user profile and settings
     match /settings/{userId} {
-      allow read, write: if isAbbas() && request.auth.uid == userId;
+      allow read, write: if isAbbas();
     }
 
-    // Leads collection: only Abbas can read, create, update, or delete job leads
+    // 3. Leads collection: only Abbas can read, create, update, or delete job leads
     match /leads/{leadId} {
       allow read, write: if isAbbas();
     }
 
-    // Run logs collection: job hunter audit trail
+    // 4. Run logs collection: job hunter audit trail (read-only for Abbas in client)
     match /run_logs/{logId} {
       allow read: if isAbbas();
       allow write: if isAbbas();
     }
 
-    // Rate limits / daily send counter
+    // 5. Rate limits / daily send counter
     match /send_quotas/{dateKey} {
       allow read, write: if isAbbas();
+    }
+
+    // 6. STRICT SERVER-ONLY COLLECTIONS:
+    // Client SDK has ZERO read or write access. Admin SDK bypasses client security rules.
+    match /private_tokens/{doc} {
+      allow read, write: if false;
+    }
+    match /api_counters/{doc} {
+      allow read, write: if false;
+    }
+    match /cron_state/{doc} {
+      allow read, write: if false;
     }
 
     // Default deny all other collections

@@ -58,6 +58,8 @@ export interface JobLead {
   matchScore: number; // 0 - 100
   matchReasons: string[]; // 3 short reasons
   missingSkills: string[];
+  applyUrlVerified?: boolean;
+  factCheckWarning?: string;
   status: LeadStatus;
   emailSubject: string;
   emailBody: string;

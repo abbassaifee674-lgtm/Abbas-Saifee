@@ -1,16 +1,23 @@
 import { JobSourceAdapter, RawJob } from "../types";
+import { checkAndIncrementApiCall } from "../../firebase/server_store";
 
-// Country ISO 2-letter mapping for Adzuna supported endpoints
-const ADZUNA_COUNTRY_MAP: Record<string, string> = {
-  australia: "au",
+// Official supported country codes for Adzuna endpoints
+const ADZUNA_SUPPORTED_COUNTRIES: Record<string, string> = {
   austria: "at",
+  australia: "au",
   germany: "de",
   france: "fr",
+  "united kingdom": "gb",
+  uk: "gb",
   italy: "it",
+  netherlands: "nl",
   "new zealand": "nz",
-  "south africa": "za",
+  poland: "pl",
+  russia: "ru",
   singapore: "sg",
-  malaysia: "my",
+  "united states": "us",
+  usa: "us",
+  "south africa": "za",
 };
 
 export class AdzunaAdapter implements JobSourceAdapter {
@@ -27,18 +34,49 @@ export class AdzunaAdapter implements JobSourceAdapter {
     const appKey = process.env.ADZUNA_APP_KEY;
     const results: RawJob[] = [];
 
-    // Filter to supported Adzuna countries or default to gb/de/at/au
-    for (const country of countries.slice(0, 3)) {
-      const code = ADZUNA_COUNTRY_MAP[country.toLowerCase()] || "de";
+    // Filter to supported Adzuna countries only; skip unsupported ones gracefully
+    const supportedTargetCountries = countries.filter(
+      (c) => !!ADZUNA_SUPPORTED_COUNTRIES[c.toLowerCase().trim()]
+    );
+
+    if (supportedTargetCountries.length === 0) {
+      return [];
+    }
+
+    for (const country of supportedTargetCountries.slice(0, 3)) {
+      const code = ADZUNA_SUPPORTED_COUNTRIES[country.toLowerCase().trim()];
+      if (!code) continue;
+
+      // Rate limit check in Firestore
+      const rateCheck = await checkAndIncrementApiCall("Adzuna");
+      if (!rateCheck.allowed) {
+        console.warn(`Adzuna daily rate limit reached (${rateCheck.currentCount}/${rateCheck.maxLimit}). Skipping call.`);
+        break;
+      }
+
       const query = encodeURIComponent(keywords[0] || "procurement");
       const url = `https://api.adzuna.com/v1/api/jobs/${code}/search/1?app_id=${appId}&app_key=${appKey}&what=${query}&results_per_page=15&content-type=application/json`;
 
       try {
-        const res = await fetch(url, { headers: { Accept: "application/json" } });
-        if (!res.ok) continue;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 6000);
+
+        const res = await fetch(url, {
+          signal: controller.signal,
+          headers: { Accept: "application/json" },
+        });
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+          console.warn(`Adzuna API response not ok for ${country} (${res.status})`);
+          continue;
+        }
+
         const data = await res.json();
 
         for (const item of data.results || []) {
+          if (!item.redirect_url) continue;
+
           results.push({
             title: item.title?.replace(/<\/?[^>]+(>|$)/g, "") || "Procurement Specialist",
             company: item.company?.display_name || "Enterprise Employer",
@@ -51,8 +89,8 @@ export class AdzunaAdapter implements JobSourceAdapter {
             salary: item.salary_min ? `${item.salary_min} - ${item.salary_max || item.salary_min}` : undefined,
           });
         }
-      } catch (e) {
-        console.warn(`Adzuna fetch error for ${country}:`, e);
+      } catch (e: any) {
+        console.warn(`Adzuna fetch error for ${country}:`, e.message || e);
       }
     }
 

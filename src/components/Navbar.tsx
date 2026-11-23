@@ -83,6 +83,19 @@ export function Navbar({
             >
               Audit Logs
             </Link>
+            <Link
+              href="/status"
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                pathname === "/status"
+                  ? "bg-slate-800/80 text-white border border-slate-700/60"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900"
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Status
+              </span>
+            </Link>
           </nav>
         </div>
 

@@ -8,6 +8,46 @@ import { TheMuseAdapter } from "./adapters/themuse";
 import { findCompanyContact } from "./email_finder";
 import { scoreJobMatch } from "../ai/matcher";
 import { generateApplicationEmail } from "../ai/email_writer";
+import { saveFirestoreLeads, saveFirestoreRunLog } from "../firebase/server_store";
+
+export async function verifyApplyUrl(url: string): Promise<boolean> {
+  if (!url || !url.startsWith("http")) return false;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4500);
+
+    const res = await fetch(url, {
+      method: "HEAD",
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) JobPilot/1.0",
+      },
+      redirect: "follow",
+    });
+    clearTimeout(timeout);
+    return res.status < 400;
+  } catch {
+    // Fallback: fast GET with 0-100 range header
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4500);
+      const res = await fetch(url, {
+        method: "GET",
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) JobPilot/1.0",
+          Range: "bytes=0-100",
+        },
+        redirect: "follow",
+      });
+      clearTimeout(timeout);
+      return res.status < 400;
+    } catch {
+      return false;
+    }
+  }
+}
 
 export class JobHunterEngine {
   private adapters: JobSourceAdapter[];
@@ -26,21 +66,30 @@ export class JobHunterEngine {
     profile: UserProfile,
     settings: UserSettings,
     existingLeads: JobLead[],
-    trigger: "manual" | "cron" = "manual"
+    trigger: "manual" | "cron" = "manual",
+    options?: { maxJobsToProcess?: number; sourceFilter?: string[]; countryFilter?: string[] }
   ): Promise<{ newLeads: JobLead[]; log: RunLog }> {
     const startTime = new Date().toISOString();
     const errors: string[] = [];
     const rawJobs: RawJob[] = [];
     const sourcesQueried: string[] = [];
 
-    // 1. Fetch from all configured adapters
+    const targetCountries = options?.countryFilter || settings.targetCountries;
+    const targetKeywords = settings.targetJobTitles;
+
+    // 1. Fetch from configured adapters
     for (const adapter of this.adapters) {
+      if (options?.sourceFilter && !options.sourceFilter.includes(adapter.name)) {
+        continue;
+      }
+
       if (!adapter.isConfigured()) {
         continue;
       }
+
       sourcesQueried.push(adapter.name);
       try {
-        const jobs = await adapter.fetchJobs(settings.targetJobTitles, settings.targetCountries);
+        const jobs = await adapter.fetchJobs(targetKeywords, targetCountries);
         rawJobs.push(...jobs);
       } catch (err: any) {
         errors.push(`${adapter.name} error: ${err.message || err}`);
@@ -74,20 +123,23 @@ export class JobHunterEngine {
     // 4. Match scoring & qualification
     const qualifiedLeads: JobLead[] = [];
     const minScore = settings.minMatchScore || 60;
+    const maxProcess = options?.maxJobsToProcess || 20;
 
-    // Limit batch per run to 25 to respect free tier rate limits
-    const candidateJobs = uniqueRawJobs.slice(0, 25);
+    const candidateJobs = uniqueRawJobs.slice(0, maxProcess);
 
     for (const raw of candidateJobs) {
       try {
-        // Evaluate candidate match
+        // Step A: Real link validation
+        const isUrlWorking = await verifyApplyUrl(raw.applyUrl);
+
+        // Step B: Evaluate candidate match via Gemini AI
         const match = await scoreJobMatch(raw.title, raw.company, raw.description, profile);
 
         if (match.matchScore >= minScore) {
-          // Find contact email
+          // Step C: Discover verified or predicted contact email
           const contact = await findCompanyContact(raw.company, raw.applyUrl, raw.description);
 
-          // Generate personalized draft email
+          // Step D: Generate tailored application draft with fact-checking
           const draft = await generateApplicationEmail(
             raw.title,
             raw.company,
@@ -107,6 +159,7 @@ export class JobHunterEngine {
             city: raw.city,
             description: raw.description,
             applyUrl: raw.applyUrl,
+            applyUrlVerified: isUrlWorking,
             contactEmail: contact.email || raw.contactEmail,
             contactStatus: contact.contactStatus,
             source: raw.source,
@@ -115,6 +168,7 @@ export class JobHunterEngine {
             matchScore: match.matchScore,
             matchReasons: match.matchReasons,
             missingSkills: match.missingSkills,
+            factCheckWarning: draft.factCheckWarning,
             status: "New",
             emailSubject: draft.subject,
             emailBody: draft.body,
@@ -125,8 +179,8 @@ export class JobHunterEngine {
           qualifiedLeads.push(lead);
         }
 
-        // Slight 300ms pause to respect free-tier AI API pacing
-        await new Promise((r) => setTimeout(r, 300));
+        // Pacing delay to stay well under Gemini rate limits
+        await new Promise((r) => setTimeout(r, 400));
       } catch (err: any) {
         errors.push(`Error evaluating job "${raw.title}" at "${raw.company}": ${err.message || err}`);
       }
@@ -143,6 +197,14 @@ export class JobHunterEngine {
       errors,
       status: errors.length === 0 ? "success" : qualifiedLeads.length > 0 ? "partial_success" : "failed",
     };
+
+    // Save to Cloud Firestore
+    try {
+      await saveFirestoreLeads(qualifiedLeads);
+      await saveFirestoreRunLog(log);
+    } catch (e) {
+      console.warn("Could not save to Firestore, local store will retain:", e);
+    }
 
     return { newLeads: qualifiedLeads, log };
   }

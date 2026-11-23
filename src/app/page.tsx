@@ -6,10 +6,14 @@ import { StatsOverview } from "@/components/StatsOverview";
 import { LeadTable } from "@/components/LeadTable";
 import { LeadDetailDrawer } from "@/components/LeadDetailDrawer";
 import { BulkSendModal } from "@/components/BulkSendModal";
-import { SeedBanner } from "@/components/SeedBanner";
 import { JobLead, UserSettings } from "@/types";
 import { ALLOWED_EMAIL, DEFAULT_USER_SETTINGS } from "@/lib/constants/defaults";
 import { RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+// SeedBanner is dynamically imported so it can be tree-shaken in production
+const SeedBanner = dynamic(() => import("@/components/SeedBanner").then((m) => m.SeedBanner), { ssr: false });
 
 export default function DashboardPage() {
   const [leads, setLeads] = useState<JobLead[]>([]);
@@ -23,9 +27,9 @@ export default function DashboardPage() {
   const [isSending, setIsSending] = useState<boolean>(false);
   const [isBulkSending, setIsBulkSending] = useState<boolean>(false);
   const [isResetting, setIsResetting] = useState<boolean>(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
+  const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4500);
   };
@@ -82,7 +86,7 @@ export default function DashboardPage() {
 
       showToast(`Application successfully dispatched to ${lead.company}!`, "success");
       if (data.warning) {
-        setTimeout(() => showToast(data.warning, "info"), 2000);
+        setTimeout(() => showToast(data.warning, "success"), 2000);
       }
 
       await loadLeads();
@@ -105,7 +109,7 @@ export default function DashboardPage() {
         },
         body: JSON.stringify({ id: leadId, status: "Skipped" }),
       });
-      showToast("Lead skipped.", "info");
+      showToast("Lead skipped.", "success");
       await loadLeads();
       setSelectedLead(null);
     } catch (e) {
@@ -116,7 +120,7 @@ export default function DashboardPage() {
   // Regenerate email with custom instructions
   const handleRegenerate = async (lead: JobLead, instruction?: string) => {
     try {
-      showToast("Regenerating AI outreach draft...", "info");
+      showToast("Regenerating AI outreach draft...", "success");
       // Call AI endpoint to rewrite
       const res = await fetch("/api/email/send", {
         method: "POST",
@@ -137,7 +141,7 @@ export default function DashboardPage() {
   // "Find Jobs Now" manual trigger
   const handleFindJobsNow = async () => {
     setIsFindingJobs(true);
-    showToast("Scanning configured job APIs across target countries...", "info");
+    showToast("Scanning configured job APIs across target countries...", "success");
     try {
       const res = await fetch("/api/jobs/find", {
         method: "POST",
@@ -229,8 +233,6 @@ export default function DashboardPage() {
           className={`fixed bottom-5 right-5 z-50 flex items-center gap-2.5 rounded-xl px-4 py-3 text-xs font-semibold shadow-2xl transition-all ${
             toast.type === "error"
               ? "bg-rose-950 border border-rose-800 text-rose-200"
-              : toast.type === "info"
-              ? "bg-slate-900 border border-slate-700 text-slate-200"
               : "bg-emerald-950 border border-emerald-800 text-emerald-200"
           }`}
         >
@@ -244,8 +246,10 @@ export default function DashboardPage() {
       )}
 
       <main className="flex-1 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
-        {/* Demo Mode / Seed Banner */}
-        <SeedBanner onResetSeed={handleResetSeed} isResetting={isResetting} />
+        {/* Demo Mode / Seed Banner — only shown when NEXT_PUBLIC_DEMO_MODE=true */}
+        {IS_DEMO && (
+          <SeedBanner onResetSeed={handleResetSeed} isResetting={isResetting} />
+        )}
 
         {/* Evening Mode Banner if Active */}
         {isEveningMode && (

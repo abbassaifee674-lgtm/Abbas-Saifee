@@ -1,11 +1,12 @@
 import crypto from "crypto";
+import { getResolvedEncryptionKey } from "../env";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 
 function getEncryptionKey(): Buffer {
-  const secret = process.env.ENCRYPTION_SECRET || "default_jobpilot_fallback_secret_key_32_bytes!!";
+  const secret = getResolvedEncryptionKey();
   return crypto.createHash("sha256").update(secret).digest();
 }
 
@@ -33,7 +34,6 @@ export function decryptToken(encryptedString: string): string {
   try {
     const parts = encryptedString.split(":");
     if (parts.length !== 3) {
-      // If plain or corrupted fallback
       return encryptedString;
     }
 

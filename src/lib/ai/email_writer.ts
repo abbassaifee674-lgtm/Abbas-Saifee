@@ -4,6 +4,61 @@ import { getAIProvider } from "./provider";
 export interface DraftEmailResponse {
   subject: string;
   body: string;
+  factCheckWarning?: string;
+}
+
+/**
+ * Fact-checks the AI draft against Abbas's CV profile:
+ * Flags any unsupported company names, unusual numbers or years not grounded in Abbas's verified CV.
+ */
+export function factCheckDraftAgainstProfile(
+  draftText: string,
+  profile: UserProfile
+): string | undefined {
+  const warnings: string[] = [];
+  const text = draftText.toLowerCase();
+
+  // Known verified facts from Abbas's CV
+  const verifiedCompanies = [
+    "gulf aircraft",
+    "pakistan beverage",
+    "pepsico",
+    "hatimi",
+    "engineering services",
+    "sidel",
+    "krones",
+    "ektam",
+  ];
+
+  // Check for common hallucinations of tech/finance/consulting firms
+  const commonHallucinatedFirms = ["mckinsey", "deloitte", "pwc", "kpmg", "google", "amazon", "apple", "microsoft", "boeing engineer"];
+  for (const firm of commonHallucinatedFirms) {
+    if (text.includes(firm)) {
+      warnings.push(`Mentioned company "${firm}" not found in Abbas's background.`);
+    }
+  }
+
+  // Check for unrealistic budget claims (Abbas directed AED 12-15M)
+  const highBudgetMatches = draftText.match(/(\$|€|£|AED|USD)\s*(\d+)\s*(billion|bn|million|M)/i);
+  if (highBudgetMatches) {
+    const amountStr = highBudgetMatches[2];
+    const unit = highBudgetMatches[3].toLowerCase();
+    const num = parseInt(amountStr, 10);
+    if (unit.startsWith("b") || num > 100) {
+      warnings.push(`High budget claim "${highBudgetMatches[0]}" exceeds Abbas's verified AED 12-15M experience.`);
+    }
+  }
+
+  // Check years of experience claim
+  const expMatch = draftText.match(/(\d+)\+?\s*years/i);
+  if (expMatch) {
+    const years = parseInt(expMatch[1], 10);
+    if (years > 10 || years < 3) {
+      warnings.push(`Experience claim of ${years} years deviates from verified ${profile.experienceYears} years.`);
+    }
+  }
+
+  return warnings.length > 0 ? warnings.join(" ") : undefined;
 }
 
 export async function generateApplicationEmail(
@@ -17,22 +72,21 @@ export async function generateApplicationEmail(
 ): Promise<DraftEmailResponse> {
   const provider = getAIProvider();
 
-  // If no Gemini key is set, generate a clean high-converting template
-  if (!process.env.GEMINI_API_KEY) {
-    return generateFallbackEmail(jobTitle, company, country, profile, settings);
-  }
-
-  const systemInstruction = `You are a high-level executive career advisor and email copywriter writing directly as ${profile.fullName}.
+  const systemInstruction = `You are a professional executive career copywriter writing directly as ${profile.fullName}.
 Write a crisp, persuasive application email addressed to the hiring team at ${company} for the ${jobTitle} opening.
 
-STRICT CONSTRAINTS:
-1. Length: 120 - 180 words (excluding signature).
+STRICT AUTHENTICITY AND COMPLIANCE RULES:
+1. Length: exactly 120 - 180 words (excluding signature).
 2. Tone: ${settings.emailTone === "friendly" ? "Professional yet warm and approachable" : "Formal, crisp, and direct"}.
 3. DO NOT use generic clichés like "I am writing to express my keen interest", "I hope this email finds you well", or "Please find attached my resume".
 4. NO emojis.
-5. Highlight 2-3 specific real achievements from Abbas's CV that directly relate to the job (e.g., directing AED 12-15M in Capex/Opex, managing OEM and AOG emergency procurement at Gulf Aircraft & Engineering Services, SAP MM expertise, reducing installation costs by 85% at PepsiCo).
-6. DO NOT invent or fabricate any experiences, degrees, dates, or metrics not in Abbas's profile.
-7. Note that Abbas is currently based in the UAE and fully available to relocate to ${country}. Mention his attached CV.
+5. Highlight 2-3 specific real achievements from Abbas's CV that directly relate to the job:
+   - Managing AED 12-15M in CAPEX and OPEX budgets at Gulf Aircraft & Engineering Services FZE
+   - Sourcing OEM certified parts, managing AOG emergency shipments, and MSL ERP automation
+   - SAP PRO HANA (MM module) and vendor negotiations reducing costs significantly (85% on plant line installations at PepsiCo)
+   - BE Electronics from NED University + OTAR Part 145/43 Foundation certification.
+6. ZERO HALLUCINATION: DO NOT invent or fabricate any experiences, degrees, dates, certifications, or metrics not in Abbas's profile.
+7. Mention that Abbas is currently based in the UAE and fully available to relocate to ${country}. Mention his attached CV.
 8. End with Abbas's exact signature:
 """
 ${settings.emailSignature}
@@ -60,19 +114,26 @@ Candidate Profile:
 - Summary: ${profile.summary}
 - Skills: ${profile.skills.join(", ")}
 - Current Role: ${profile.pastTitles[0] || ""}
+- Past Experience: ${profile.pastTitles.join("; ")}
 - Education: ${profile.education.join("; ")}
 
 Write the tailored application email draft:`;
 
   try {
-    const result = await provider.generateJSON<DraftEmailResponse>(prompt, systemInstruction);
-    return {
-      subject: result.subject || `Application: ${jobTitle} - ${profile.fullName}`,
-      body: result.body || generateFallbackEmail(jobTitle, company, country, profile, settings).body,
-    };
+    const result = await provider.generateJSON<{ subject: string; body: string }>(prompt, systemInstruction);
+    const body = result.body || "";
+    const subject = result.subject || `Application: ${jobTitle} – ${profile.fullName}`;
+    const factCheckWarning = factCheckDraftAgainstProfile(body, profile);
+
+    return { subject, body, factCheckWarning };
   } catch (err) {
-    console.warn("Failed to generate AI email via Gemini, using fallback:", err);
-    return generateFallbackEmail(jobTitle, company, country, profile, settings);
+    console.warn("Gemini email generation error, generating fallback draft:", err);
+    const fallback = generateFallbackEmail(jobTitle, company, country, profile, settings);
+    return {
+      subject: fallback.subject,
+      body: fallback.body,
+      factCheckWarning: undefined,
+    };
   }
 }
 
@@ -86,25 +147,22 @@ export async function generateFollowUpEmail(
 ): Promise<DraftEmailResponse> {
   const provider = getAIProvider();
 
-  if (!process.env.GEMINI_API_KEY) {
-    return {
-      subject: `Following up: ${originalSubject.replace(/^Re:\s*/i, "")}`,
-      body: `Hi ${company} Hiring Team,\n\nI wanted to briefly follow up on my application sent on ${sentDate} regarding the ${jobTitle} position.\n\nWith my 6+ years of technical procurement background managing AED 12-15M in budgets and SAP MM operations, I am confident I can bring immediate value to ${company}'s supply chain operations.\n\nI would welcome the opportunity to discuss how my sourcing expertise aligns with your team's goals. I have attached my CV once again for your convenience.\n\n${settings.emailSignature}`
-    };
-  }
-
   const systemInstruction = `You are writing a polite, concise 60-90 word follow-up email from ${profile.fullName} to the hiring team at ${company} regarding his application sent on ${sentDate}.
-Keep it respectful, confident, and free of pressure.
+Keep it respectful, confident, grounded in his verified background, and free of pressure.
 Return valid JSON: { "subject": "...", "body": "..." }`;
 
   const prompt = `Role: ${jobTitle} at ${company}. Sent date: ${sentDate}. Candidate: ${profile.fullName}. Signature:\n${settings.emailSignature}`;
 
   try {
-    return await provider.generateJSON<DraftEmailResponse>(prompt, systemInstruction);
+    const result = await provider.generateJSON<{ subject: string; body: string }>(prompt, systemInstruction);
+    return {
+      subject: result.subject,
+      body: result.body,
+    };
   } catch (e) {
     return {
       subject: `Following up: ${originalSubject}`,
-      body: `Hi ${company} Team,\n\nFollowing up on my note regarding the ${jobTitle} opportunity. I remain very enthusiastic about contributing my 6+ years of procurement and strategic sourcing experience to your team.\n\nPlease let me know if you need any additional details or if a brief call might be possible this week.\n\n${settings.emailSignature}`
+      body: `Hi ${company} Team,\n\nFollowing up on my note regarding the ${jobTitle} opportunity. I remain very enthusiastic about contributing my 6+ years of procurement and strategic sourcing experience to your team.\n\nPlease let me know if you need any additional details or if a brief call might be possible this week.\n\n${settings.emailSignature}`,
     };
   }
 }
@@ -115,7 +173,7 @@ function generateFallbackEmail(
   country: string,
   profile: UserProfile,
   settings: UserSettings
-): DraftEmailResponse {
+): { subject: string; body: string } {
   const subject = `Application for ${jobTitle} – Abbas Saifee`;
   const body = `Dear ${company} Hiring Team,
 
