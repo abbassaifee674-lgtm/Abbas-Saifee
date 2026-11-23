@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
 
   // 3. Google Gemini AI
   const geminiStart = Date.now();
+  const currentModel = process.env.GEMINI_MODEL || process.env.AI_MODEL || "gemini-2.5-flash";
   try {
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("GEMINI_API_KEY is not set in environment.");
@@ -69,18 +70,33 @@ export async function GET(req: NextRequest) {
     const provider = getAIProvider();
     const testReply = await provider.generateText("Return only the word 'OK'.");
     results.gemini = {
-      name: "Google Gemini AI (Flash Model)",
+      name: `Google Gemini AI (${currentModel})`,
       status: "healthy",
       latencyMs: Date.now() - geminiStart,
       message: `Gemini response confirmed (${testReply.trim().slice(0, 20)}).`,
     };
   } catch (err: any) {
+    let cleanMessage = err.message || String(err);
+    // If error contains JSON error object, parse it for clean readability
+    try {
+      if (cleanMessage.includes("{")) {
+        const jsonPart = cleanMessage.slice(cleanMessage.indexOf("{"));
+        const parsed = JSON.parse(jsonPart);
+        if (parsed?.error?.message) {
+          const reason = parsed?.error?.details?.[0]?.reason;
+          cleanMessage = reason ? `${parsed.error.message} (${reason})` : parsed.error.message;
+        }
+      }
+    } catch {
+      // Keep original message if parsing fails
+    }
+
     results.gemini = {
-      name: "Google Gemini AI (Flash Model)",
+      name: `Google Gemini AI (${currentModel})`,
       status: "unhealthy",
       latencyMs: Date.now() - geminiStart,
-      message: `Gemini API error: ${err.message}`,
-      fixHint: "Check GEMINI_API_KEY at https://aistudio.google.com/",
+      message: `Gemini API error: ${cleanMessage}`,
+      fixHint: "Check GEMINI_API_KEY at https://aistudio.google.com/ and verify API restrictions in Google Cloud Console.",
     };
   }
 

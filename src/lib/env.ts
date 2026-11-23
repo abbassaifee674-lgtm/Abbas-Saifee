@@ -30,7 +30,8 @@ const envSchema = z.object({
 
   // AI Engine
   GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY is required"),
-  AI_MODEL: z.string().default("gemini-2.0-flash"),
+  GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+  AI_MODEL: z.string().default("gemini-2.5-flash"),
 
   // Job APIs
   ADZUNA_APP_ID: z.string().min(1, "ADZUNA_APP_ID is required"),
@@ -78,7 +79,8 @@ export function validateEnv(): EnvValidationResult {
     FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,
     FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-    AI_MODEL: process.env.AI_MODEL || "gemini-2.0-flash",
+    GEMINI_MODEL: process.env.GEMINI_MODEL || process.env.AI_MODEL || "gemini-2.5-flash",
+    AI_MODEL: process.env.GEMINI_MODEL || process.env.AI_MODEL || "gemini-2.5-flash",
     ADZUNA_APP_ID: process.env.ADZUNA_APP_ID,
     ADZUNA_APP_KEY: process.env.ADZUNA_APP_KEY,
     JOOBLE_API_KEY: process.env.JOOBLE_API_KEY,
