@@ -1,11 +1,10 @@
-import { GoogleGenAI } from "@google/genai";
 import { AICompletionOptions, AIProvider } from "./provider";
 
-// Queue to enforce rate limit pacing (< 14 requests per minute to stay safe on free tier)
+// Rate limit queue (< 14 requests per minute to stay safe on free tier: min 2.5s interval)
 class RequestQueue {
   private queue: (() => Promise<void>)[] = [];
   private isProcessing = false;
-  private minIntervalMs = 2500; // minimum 2.5 seconds between requests
+  private minIntervalMs = 2500;
 
   async enqueue<T>(task: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -40,8 +39,10 @@ class RequestQueue {
 
 const geminiQueue = new RequestQueue();
 
-// Candidate models to try in priority order (avoid deprecated gemini-1.5-flash)
-const FALLBACK_MODELS = [
+// Model cascade: tries configured GEMINI_MODEL first (default gemini-2.5-flash),
+// then falls back across modern free flash models if one returns 404 or is unavailable.
+// Note: gemini-1.5-flash is deprecated and excluded.
+const DEFAULT_FALLBACK_MODELS = [
   "gemini-2.5-flash",
   "gemini-2.0-flash",
   "gemini-2.0-flash-lite",
@@ -51,17 +52,14 @@ export class GeminiProvider implements AIProvider {
   name = "gemini";
   private apiKey: string;
   private models: string[];
-  private ai: GoogleGenAI | null = null;
 
   constructor() {
-    this.apiKey = process.env.GEMINI_API_KEY || "";
-    if (this.apiKey) {
-      this.ai = new GoogleGenAI({ apiKey: this.apiKey });
-    }
+    // Accept any non-empty key (no regex or format validation for "AIza")
+    this.apiKey = (process.env.GEMINI_API_KEY || "").trim();
 
-    const preferredModel = process.env.GEMINI_MODEL || process.env.AI_MODEL || "gemini-2.5-flash";
-    // Deduplicate models while keeping preferredModel at index 0
-    this.models = Array.from(new Set([preferredModel, ...FALLBACK_MODELS]));
+    const preferredModel = (process.env.GEMINI_MODEL || process.env.AI_MODEL || "gemini-2.5-flash").trim();
+    // Keep preferred model at index 0 without duplicates
+    this.models = Array.from(new Set([preferredModel, ...DEFAULT_FALLBACK_MODELS]));
   }
 
   async generateText(
@@ -70,13 +68,13 @@ export class GeminiProvider implements AIProvider {
     options?: AICompletionOptions
   ): Promise<string> {
     if (!this.apiKey) {
-      throw new Error("GEMINI_API_KEY is missing. Please set GEMINI_API_KEY in .env.local.");
+      throw new Error("GEMINI_API_KEY is not configured in environment variables.");
     }
 
-    return geminiQueue.enqueue(() => this.executeWithFallback(prompt, systemInstruction, options));
+    return geminiQueue.enqueue(() => this.executeWithModelFallback(prompt, systemInstruction, options));
   }
 
-  private async executeWithFallback(
+  private async executeWithModelFallback(
     prompt: string,
     systemInstruction?: string,
     options?: AICompletionOptions
@@ -85,95 +83,47 @@ export class GeminiProvider implements AIProvider {
 
     for (const model of this.models) {
       try {
-        return await this.callWithRetry(model, prompt, systemInstruction, options);
+        return await this.callRestWithRetry(model, prompt, systemInstruction, options);
       } catch (err: any) {
         lastError = err;
-        const msg = err.message || "";
-        const isNotFoundOrDeprecated =
+        const msg = (err.message || "").toLowerCase();
+        const isUnavailableOrNotFound =
           err.status === 404 ||
           msg.includes("404") ||
           msg.includes("not found") ||
           msg.includes("unsupported") ||
-          msg.includes("deprecated");
+          msg.includes("deprecated") ||
+          msg.includes("is not found for api version");
 
-        if (isNotFoundOrDeprecated) {
-          console.warn(`[Gemini Fallback] Model ${model} unavailable (${msg}). Trying next candidate model...`);
+        if (isUnavailableOrNotFound) {
+          console.warn(`[Gemini Fallback] Model '${model}' unavailable: ${err.message}. Trying next candidate model...`);
           continue;
         }
 
-        // If it's another error (like auth or bad request), try the direct REST endpoint before moving to next model
-        try {
-          return await this.callDirectRest(model, prompt, systemInstruction, options);
-        } catch (restErr: any) {
-          lastError = restErr;
-          console.warn(`[Gemini Direct REST Fallback] Model ${model} failed on direct REST:`, restErr.message);
-        }
+        // If it's another non-fallback error (e.g. auth 401 or bad request), don't silently skip
+        // but try the next model if available just in case model name permissions differ
+        console.warn(`[Gemini Error] Model '${model}' request failed: ${err.message}`);
       }
     }
 
-    throw lastError || new Error("All configured Gemini models failed.");
+    throw lastError || new Error("All configured Gemini models failed to respond.");
   }
 
-  private async callWithRetry(
+  /**
+   * Direct REST call to https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
+   * Sends the key in the "x-goog-api-key" HTTP header (never as a ?key= query parameter).
+   * Supports exponential backoff retry on 429 rate limits.
+   */
+  private async callRestWithRetry(
     model: string,
     prompt: string,
     systemInstruction?: string,
     options?: AICompletionOptions,
     attempt = 1
   ): Promise<string> {
-    try {
-      if (!this.ai) {
-        throw new Error("GoogleGenAI client not initialized.");
-      }
-
-      const config: any = {};
-      if (systemInstruction) config.systemInstruction = systemInstruction;
-      if (options?.jsonMode) config.responseMimeType = "application/json";
-      if (options?.temperature !== undefined) config.temperature = options.temperature;
-      if (options?.maxTokens !== undefined) config.maxOutputTokens = options.maxTokens;
-
-      const response = await this.ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: Object.keys(config).length > 0 ? config : undefined,
-      });
-
-      const text = response.text;
-      if (!text) {
-        throw new Error("No text returned in Gemini response.");
-      }
-      return text;
-    } catch (err: any) {
-      const isRateLimit =
-        err.status === 429 ||
-        err.message?.includes("429") ||
-        err.message?.includes("RESOURCE_EXHAUSTED") ||
-        err.message?.includes("quota");
-
-      if (isRateLimit && attempt <= 3) {
-        const delay = Math.pow(2, attempt) * 1000 + Math.random() * 500;
-        console.warn(`[Gemini Rate Limit] Attempt ${attempt} hit 429 on ${model}. Retrying in ${delay.toFixed(0)}ms...`);
-        await new Promise((r) => setTimeout(r, delay));
-        return this.callWithRetry(model, prompt, systemInstruction, options, attempt + 1);
-      }
-
-      throw err;
-    }
-  }
-
-  /**
-   * Direct REST fallback: calls generativelanguage.googleapis.com directly
-   * sending the key strictly in the "x-goog-api-key" header (never ?key= query parameter)
-   */
-  private async callDirectRest(
-    model: string,
-    prompt: string,
-    systemInstruction?: string,
-    options?: AICompletionOptions
-  ): Promise<string> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-    const body: any = {
+    const body: Record<string, any> = {
       contents: [
         {
           parts: [{ text: prompt }],
@@ -187,7 +137,7 @@ export class GeminiProvider implements AIProvider {
       };
     }
 
-    const generationConfig: any = {};
+    const generationConfig: Record<string, any> = {};
     if (options?.jsonMode) {
       generationConfig.responseMimeType = "application/json";
     }
@@ -205,24 +155,37 @@ export class GeminiProvider implements AIProvider {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-goog-api-key": this.apiKey,
+        "x-goog-api-key": this.apiKey, // Strictly in header, never as ?key= query param
       },
       body: JSON.stringify(body),
     });
 
+    // Handle 429 rate limit with exponential backoff
+    if (res.status === 429 && attempt <= 3) {
+      const delay = Math.pow(2, attempt) * 1000 + Math.random() * 500;
+      console.warn(`[Gemini Rate Limit] 429 on model ${model} (attempt ${attempt}). Retrying in ${delay.toFixed(0)}ms...`);
+      await new Promise((r) => setTimeout(r, delay));
+      return this.callRestWithRetry(model, prompt, systemInstruction, options, attempt + 1);
+    }
+
     const data = await res.json().catch(() => null);
 
     if (!res.ok) {
-      const errorMsg = data?.error?.message || `HTTP ${res.status} from Gemini REST API`;
-      const reason = data?.error?.details?.[0]?.reason || "";
-      const fullError = reason ? `${errorMsg} (${reason})` : errorMsg;
-      throw new Error(fullError);
+      const errorObj = data?.error;
+      const message = errorObj?.message || `HTTP ${res.status} from Gemini REST API`;
+      const reason = errorObj?.details?.[0]?.reason || "";
+      const errorMsg = reason ? `${message} (${reason})` : message;
+      const error = new Error(errorMsg) as any;
+      error.status = res.status;
+      error.details = errorObj;
+      throw error;
     }
 
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      throw new Error("Empty candidate parts returned from Gemini API");
+    if (typeof text !== "string") {
+      throw new Error(`Empty or invalid candidate content received from Gemini model '${model}'`);
     }
+
     return text;
   }
 
@@ -240,7 +203,7 @@ export class GeminiProvider implements AIProvider {
       return JSON.parse(cleaned) as T;
     } catch (parseError) {
       console.error("Failed to parse Gemini JSON output:", text);
-      throw new Error(`Invalid JSON format from Gemini: ${parseError}`);
+      throw new Error(`Invalid JSON format returned by Gemini: ${parseError}`);
     }
   }
 }
