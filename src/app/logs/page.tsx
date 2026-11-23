@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Navbar } from "../../components/Navbar";
+import { authFetch } from "../../lib/utils/api_client";
 import { RunLog } from "../../types";
 import { ALLOWED_EMAIL } from "../../lib/constants/defaults";
 import { Activity, Clock, CheckCircle2, AlertTriangle, Layers, RefreshCw } from "lucide-react";
@@ -15,7 +16,7 @@ export default function LogsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/jobs/logs", {
+      const res = await authFetch("/api/jobs/logs", {
         headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) throw new Error(`Failed to fetch logs: ${res.status}`);

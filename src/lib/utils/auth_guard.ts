@@ -28,11 +28,12 @@ export async function verifyAbbasAuth(req: NextRequest): Promise<AuthenticatedUs
     };
   }
 
-  // Only allow bypass when DEMO_MODE=true is explicitly set in environment
-  if (isDemo && demoHeader === "abbas") {
+  // Allow bypass in local development (NODE_ENV !== "production") or when DEMO_MODE=true
+  const isDev = process.env.NODE_ENV !== "production";
+  if ((isDemo || isDev) && demoHeader === "abbas") {
     return {
       email: ALLOWED_EMAIL,
-      uid: "abbas_saifee_demo_uid",
+      uid: "abbas_saifee_local_uid",
     };
   }
 

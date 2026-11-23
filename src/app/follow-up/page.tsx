@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { Navbar } from "../../components/Navbar";
+import { authFetch } from "../../lib/utils/api_client";
+import { auth } from "../../lib/firebase/client";
+import { onAuthStateChanged } from "firebase/auth";
 import { JobLead } from "../../types";
 import { ALLOWED_EMAIL } from "../../lib/constants/defaults";
 import {
@@ -28,7 +31,7 @@ export default function FollowUpPage() {
 
   const loadLeads = async () => {
     try {
-      const res = await fetch("/api/jobs/leads", { headers: { "x-demo-user": "abbas" } });
+      const res = await authFetch("/api/jobs/leads", { headers: { "x-demo-user": "abbas" } });
       if (res.ok) {
         const data = await res.json();
         setLeads(data.leads || []);
@@ -39,7 +42,14 @@ export default function FollowUpPage() {
   };
 
   useEffect(() => {
-    loadLeads();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user || process.env.NODE_ENV !== "production") {
+        loadLeads();
+      } else if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login";
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   // Filter leads sent 7 or more days ago with status "Sent" (no reply received yet)
@@ -52,7 +62,7 @@ export default function FollowUpPage() {
   const handleSendFollowUp = async (lead: JobLead) => {
     setIsSendingId(lead.id);
     try {
-      const res = await fetch("/api/email/send", {
+      const res = await authFetch("/api/email/send", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-demo-user": "abbas" },
         body: JSON.stringify({
@@ -80,7 +90,7 @@ export default function FollowUpPage() {
     setIsCheckingReplies(true);
     showToast("Inspecting Gmail inbox threads for employer replies...", "info");
     try {
-      const res = await fetch("/api/email/check-replies", {
+      const res = await authFetch("/api/email/check-replies", {
         method: "POST",
         headers: { "x-demo-user": "abbas" },
       });

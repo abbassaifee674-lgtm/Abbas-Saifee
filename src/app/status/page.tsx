@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Navbar } from "../../components/Navbar";
+import { authFetch } from "../../lib/utils/api_client";
 import { ALLOWED_EMAIL } from "../../lib/constants/defaults";
 import {
   Activity,
@@ -42,7 +43,7 @@ export default function StatusPage() {
     setIsLoading(true);
     setTestResult(null);
     try {
-      const res = await fetch("/api/status/health", {
+      const res = await authFetch("/api/status/health", {
         headers: { "x-demo-user": "abbas" },
       });
       const data = await res.json();
@@ -62,7 +63,7 @@ export default function StatusPage() {
     setIsSendingTest(true);
     setTestResult(null);
     try {
-      const res = await fetch("/api/status/test-email", {
+      const res = await authFetch("/api/status/test-email", {
         method: "POST",
         headers: { "x-demo-user": "abbas" },
       });

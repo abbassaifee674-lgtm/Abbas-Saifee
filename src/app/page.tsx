@@ -10,6 +10,9 @@ import { JobLead, UserSettings } from "../types";
 import { ALLOWED_EMAIL, DEFAULT_USER_SETTINGS } from "../lib/constants/defaults";
 import { RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
 import dynamic from "next/dynamic";
+import { authFetch } from "../lib/utils/api_client";
+import { auth } from "../lib/firebase/client";
+import { onAuthStateChanged } from "firebase/auth";
 
 const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 // SeedBanner is dynamically imported so it can be tree-shaken in production
@@ -37,9 +40,7 @@ export default function DashboardPage() {
   // Fetch leads on mount
   const loadLeads = async () => {
     try {
-      const res = await fetch("/api/jobs/leads", {
-        headers: { "x-demo-user": "abbas" },
-      });
+      const res = await authFetch("/api/jobs/leads");
       if (res.ok) {
         const data = await res.json();
         setLeads(data.leads || []);
@@ -52,7 +53,15 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    loadLeads();
+    // In production, wait for Firebase Auth to initialize before fetching leads
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user || process.env.NODE_ENV !== "production") {
+        loadLeads();
+      } else if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login";
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   // Top statistics
@@ -65,7 +74,7 @@ export default function DashboardPage() {
   const handleSendLead = async (lead: JobLead, customSubject?: string, customBody?: string) => {
     setIsSending(true);
     try {
-      const res = await fetch("/api/email/send", {
+      const res = await authFetch("/api/email/send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -101,7 +110,7 @@ export default function DashboardPage() {
   // Skip lead
   const handleSkipLead = async (leadId: string) => {
     try {
-      await fetch("/api/jobs/leads", {
+      await authFetch("/api/jobs/leads", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -122,7 +131,7 @@ export default function DashboardPage() {
     try {
       showToast("Regenerating AI outreach draft...", "success");
       // Call AI endpoint to rewrite
-      const res = await fetch("/api/email/send", {
+      const res = await authFetch("/api/email/send", {
         method: "POST",
         headers: { "x-demo-user": "abbas", "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -143,7 +152,7 @@ export default function DashboardPage() {
     setIsFindingJobs(true);
     showToast("Scanning configured job APIs across target countries...", "success");
     try {
-      const res = await fetch("/api/jobs/find", {
+      const res = await authFetch("/api/jobs/find", {
         method: "POST",
         headers: { "x-demo-user": "abbas" },
       });
@@ -174,7 +183,7 @@ export default function DashboardPage() {
   const handleConfirmBulkSend = async () => {
     setIsBulkSending(true);
     try {
-      const res = await fetch("/api/email/bulk-send", {
+      const res = await authFetch("/api/email/bulk-send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -202,7 +211,7 @@ export default function DashboardPage() {
   const handleResetSeed = async () => {
     setIsResetting(true);
     try {
-      const res = await fetch("/api/jobs/seed", {
+      const res = await authFetch("/api/jobs/seed", {
         method: "POST",
         headers: { "x-demo-user": "abbas" },
       });

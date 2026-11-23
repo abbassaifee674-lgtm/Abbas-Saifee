@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { Navbar } from "../../components/Navbar";
+import { authFetch } from "../../lib/utils/api_client";
+import { auth } from "../../lib/firebase/client";
+import { onAuthStateChanged } from "firebase/auth";
 import { UserProfile, UserSettings } from "../../types";
 import { ALLOWED_EMAIL, INITIAL_COUNTRIES, INITIAL_JOB_TITLES } from "../../lib/constants/defaults";
 import {
@@ -38,8 +41,8 @@ export default function SettingsPage() {
     const fetchData = async () => {
       try {
         const [pRes, sRes] = await Promise.all([
-          fetch("/api/cv/profile", { headers: { "x-demo-user": "abbas" } }),
-          fetch("/api/settings", { headers: { "x-demo-user": "abbas" } }),
+          authFetch("/api/cv/profile"),
+          authFetch("/api/settings"),
         ]);
 
         if (pRes.ok) {
@@ -54,7 +57,15 @@ export default function SettingsPage() {
         console.error("Failed to load settings:", err);
       }
     };
-    fetchData();
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user || process.env.NODE_ENV !== "production") {
+        fetchData();
+      } else if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+        window.location.href = "/login";
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   const handleSaveSettings = async () => {
@@ -62,12 +73,12 @@ export default function SettingsPage() {
     setIsSaving(true);
     try {
       const [sRes, pRes] = await Promise.all([
-        fetch("/api/settings", {
+        authFetch("/api/settings", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-demo-user": "abbas" },
           body: JSON.stringify(settings),
         }),
-        fetch("/api/cv/profile", {
+        authFetch("/api/cv/profile", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-demo-user": "abbas" },
           body: JSON.stringify(profile),
@@ -111,7 +122,7 @@ export default function SettingsPage() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("/api/cv/upload", {
+      const res = await authFetch("/api/cv/upload", {
         method: "POST",
         headers: { "x-demo-user": "abbas" },
         body: formData,
