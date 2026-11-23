@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { signInWithPopup } from "firebase/auth";
-import { auth, googleProvider } from "@/lib/firebase/client";
-import { ALLOWED_EMAIL } from "@/lib/constants/defaults";
+import { auth, googleProvider } from "../../lib/firebase/client";
+import { ALLOWED_EMAIL } from "../../lib/constants/defaults";
 import { Plane, Lock, AlertCircle, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 

@@ -1,19 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Navbar } from "@/components/Navbar";
-import { StatsOverview } from "@/components/StatsOverview";
-import { LeadTable } from "@/components/LeadTable";
-import { LeadDetailDrawer } from "@/components/LeadDetailDrawer";
-import { BulkSendModal } from "@/components/BulkSendModal";
-import { JobLead, UserSettings } from "@/types";
-import { ALLOWED_EMAIL, DEFAULT_USER_SETTINGS } from "@/lib/constants/defaults";
+import { Navbar } from "../components/Navbar";
+import { StatsOverview } from "../components/StatsOverview";
+import { LeadTable } from "../components/LeadTable";
+import { LeadDetailDrawer } from "../components/LeadDetailDrawer";
+import { BulkSendModal } from "../components/BulkSendModal";
+import { JobLead, UserSettings } from "../types";
+import { ALLOWED_EMAIL, DEFAULT_USER_SETTINGS } from "../lib/constants/defaults";
 import { RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
 import dynamic from "next/dynamic";
 
 const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 // SeedBanner is dynamically imported so it can be tree-shaken in production
-const SeedBanner = dynamic(() => import("@/components/SeedBanner").then((m) => m.SeedBanner), { ssr: false });
+const SeedBanner = dynamic(() => import("../components/SeedBanner").then((m) => m.SeedBanner), { ssr: false });
 
 export default function DashboardPage() {
   const [leads, setLeads] = useState<JobLead[]>([]);

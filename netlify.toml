@@ -1,17 +1,16 @@
 [build]
   command = "npm run build"
-  publish = ".next"
 
-# Use the official Next.js plugin so Netlify can serve the app correctly
+# Use the official Next.js plugin for Netlify
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Netlify Scheduled Function – runs at 08:00 and 18:00 UTC every day
+# Netlify Scheduled Function – runs twice daily at 08:00 and 18:00 UTC
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
-# Environment variable hints (actual values set in Netlify dashboard)
+# Environment hints
 [context.production.environment]
   NODE_ENV = "production"
   NEXT_TELEMETRY_DISABLED = "1"

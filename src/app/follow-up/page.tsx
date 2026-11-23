@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Navbar } from "@/components/Navbar";
-import { JobLead } from "@/types";
-import { ALLOWED_EMAIL } from "@/lib/constants/defaults";
+import { Navbar } from "../../components/Navbar";
+import { JobLead } from "../../types";
+import { ALLOWED_EMAIL } from "../../lib/constants/defaults";
 import {
   Clock,
   Send,

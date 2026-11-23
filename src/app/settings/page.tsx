@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Navbar } from "@/components/Navbar";
-import { UserProfile, UserSettings } from "@/types";
-import { ALLOWED_EMAIL, INITIAL_COUNTRIES, INITIAL_JOB_TITLES } from "@/lib/constants/defaults";
+import { Navbar } from "../../components/Navbar";
+import { UserProfile, UserSettings } from "../../types";
+import { ALLOWED_EMAIL, INITIAL_COUNTRIES, INITIAL_JOB_TITLES } from "../../lib/constants/defaults";
 import {
   Save,
   Upload,

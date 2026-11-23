@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Navbar } from "@/components/Navbar";
-import { RunLog } from "@/types";
-import { ALLOWED_EMAIL } from "@/lib/constants/defaults";
+import { Navbar } from "../../components/Navbar";
+import { RunLog } from "../../types";
+import { ALLOWED_EMAIL } from "../../lib/constants/defaults";
 import { Activity, Clock, CheckCircle2, AlertTriangle, Layers, RefreshCw } from "lucide-react";
 
 export default function LogsPage() {
